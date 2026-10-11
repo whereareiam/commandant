@@ -1,10 +1,10 @@
 ---
-version: 0.0.2
+version: 1.0.0
 ---
 
-# Commandant 0.0.2 - [Short subtitle]
+# Commandant 1.0.0 - Stable commands
 
-[1-2 sentence summary of the release.]
+Commandant 1.0.0 is the first stable release and builds on Keystone 1.0.0. Plugins parse their commands themselves and hand them to `Commandant.process`, which applies definitions, help and pagination; plugins written against 0.0.1 need the upgrade steps below.
 
 ## Highlights
 
