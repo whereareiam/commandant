@@ -1,0 +1,58 @@
+name-template: "$RESOLVED_VERSION"
+tag-template: "$RESOLVED_VERSION"
+# The release drafter workflow sorts the changes by their title prefix.
+change-template: "* $TITLE ([#$NUMBER]($URL))"
+change-title-escapes: "\\<*_&"
+category-template: "## $TITLE"
+no-changes-template: "* No changes"
+# The text between the markers comes from .github/release-notes.md when it names the resolved version.
+template: |
+  <!-- release-notes:start -->
+  # Commandant $RESOLVED_VERSION - [Short subtitle]
+
+  [1-2 sentence summary of the release.]
+  <!-- release-notes:end -->
+
+  # Changelog
+
+  $CHANGES
+
+  **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...$RESOLVED_TAG
+
+  # Installation
+
+  Java 17 or newer is required. Add `me.whereareiam:commandant:$RESOLVED_VERSION` from `https://registry.whereareiam.me/maven/packages`; your plugin provides Cloud and Adventure.
+
+categories:
+  - type: pre-exclude
+    when:
+      label: skip-changelog
+
+  - title: "What’s new"
+    exclusive: true
+    semver-increment: minor
+    when:
+      label: feature
+
+  - title: "Enhancements"
+    exclusive: true
+    when:
+      label: change
+
+  - title: "Fixes"
+    exclusive: true
+    when:
+      label: bug
+
+  - title: "Dependencies"
+    exclusive: true
+    when:
+      label: dependencies
+
+  - type: version-resolver
+    semver-increment: major
+    when:
+      label: major
+
+  - type: version-resolver
+    semver-increment: patch
