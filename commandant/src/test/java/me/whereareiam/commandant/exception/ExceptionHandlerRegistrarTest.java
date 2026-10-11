@@ -187,6 +187,11 @@ class ExceptionHandlerRegistrarTest {
 		}
 
 		@Override
+		public @NotNull String renderTemplate(@NotNull SerializerContent content) {
+			return content.getMessage();
+		}
+
+		@Override
 		public @NotNull Component serialize(
 				@NotNull Actor receiver,
 				@NotNull String message,

@@ -1,6 +1,8 @@
 import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.api.publish.PublishingExtension
+import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.api.tasks.testing.Test
 
 plugins {
@@ -14,9 +16,12 @@ val buildVersion = providers.environmentVariable("VERSION").orElse("dev")
 group = "me.whereareiam"
 version = buildVersion.get()
 
+java {
+    toolchain.languageVersion.set(JavaLanguageVersion.of(17))
+}
+
 tasks.withType<JavaCompile>().configureEach {
-    sourceCompatibility = JavaVersion.VERSION_17.toString()
-    targetCompatibility = JavaVersion.VERSION_17.toString()
+    options.release.set(17)
 }
 
 dependencies {
@@ -35,22 +40,21 @@ tasks.withType<Test>().configureEach {
 }
 
 extensions.configure<PublishingExtension> {
+    publications.withType<MavenPublication>().configureEach {
+        pom {
+            url.set("https://github.com/whereareiam/commandant")
+        }
+    }
+
     repositories {
         maven {
-            val realm = providers.environmentVariable("PUBLISH_REALM")
-                .orElse(
-                    buildVersion.map { versionString ->
-                        if (versionString.contains("dev", ignoreCase = true)) "development" else "release"
-                    }
-                )
-                .get()
-                .lowercase()
-
-            url = uri("https://maven.whereareiam.me/$realm")
+            val base = providers.environmentVariable("PUBLISH_MAVEN_BASE_URL").orElse("https://registry.whereareiam.me/maven").get()
+            val repository = providers.environmentVariable("PUBLISH_MAVEN_REPOSITORY").orElse("packages").get()
+            url = uri("$base/$repository")
 
             credentials {
-                username = providers.environmentVariable("PUBLISH_USER").orNull.orEmpty()
-                password = providers.environmentVariable("PUBLISH_TOKEN").orNull.orEmpty()
+                username = providers.environmentVariable("PUBLISH_USER").orNull
+                password = providers.environmentVariable("PUBLISH_TOKEN").orNull
             }
         }
     }
