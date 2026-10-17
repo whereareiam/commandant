@@ -74,6 +74,13 @@ public class ExceptionMessageKeys {
 	private final String invalidSender;
 
 	/**
+	 * Key for messages about a command on cooldown.
+	 * Placeholder: content - the seconds left until the command can be used again, rounded up
+	 */
+	@NotNull
+	private final String cooldown;
+
+	/**
 	 * Creates a default key configuration using "commandant.exception.*" prefix.
 	 *
 	 * @return default exception message keys
@@ -88,6 +95,7 @@ public class ExceptionMessageKeys {
 				.invalidSyntaxNumber("commandant.exception.invalid_syntax.number")
 				.invalidSyntaxString("commandant.exception.invalid_syntax.string")
 				.invalidSender("commandant.exception.invalid_sender")
+				.cooldown("commandant.exception.cooldown")
 				.build();
 	}
 }

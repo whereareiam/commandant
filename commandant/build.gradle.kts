@@ -7,6 +7,7 @@ dependencies {
     implementation(project(":commandant-common"))
 
     compileOnly(libs.cloud.annotations)
+    compileOnly(libs.cloud.cooldowns)
 
     // Testing
     testRuntimeOnly(libs.junit.platform)
