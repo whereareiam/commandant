@@ -1,19 +1,17 @@
 ---
-version: 1.0.0
+version: 1.1.0
 ---
 
-# Commandant 1.0.0 - Stable commands
+# Commandant 1.1.0 - Command cooldowns
 
-Commandant 1.0.0 is the first stable release and builds on Keystone 1.0.0. Plugins parse their commands themselves and hand them to `Commandant.process`, which applies definitions, help and pagination; plugins written against 0.0.1 need the upgrade steps below.
+Commandant 1.1.0 enforces the cooldowns that definitions give their commands: register `CommandCooldowns` on the command manager, and a sender who runs a command again too soon is told how long to wait.
 
 ## Highlights
 
-* Commands are parsed by your own parser and handed to `Commandant.process(command, manager)`, which applies a definition's overrides through a `DefinitionAdapter` before registering them.
-* Definitions can declare root aliases, and usage tokens that do not match the command's arguments fail fast.
-* Help and pagination are configured through fluent builders; help can list a command once per definition.
-* Exception messages format their placeholder values through `ExceptionFormatting`, with built-in formatters for Cloud permissions.
-* `CommandantSyntaxFormatter` gives Cloud's syntax messages the argument format of Commandant's help.
+* `DefinitionAdapter.Cooldown` gives a definition's command a cooldown in seconds; definitions naming the same group share one, and a blank group gives a definition a cooldown of its own.
+* `CommandCooldowns.register` enforces the cooldowns per sender with Cloud's cooldown processor and sends the new `cooldown` message of `ExceptionMessages`, or `ExceptionMessageKeys.getCooldown()`, with the seconds left as `content`. The console is never limited.
 
 ## Upgrading
 
-* `Command`, `CommandDefinition` and `CommandRegistrar` are removed; parse commands yourself and register them through `Commandant.process`.
+* A definition with a cooldown needs `org.incendo:cloud-processors-cooldown` at runtime.
+* `ExceptionMessageKeys` has a new required `cooldown` key; `ExceptionMessageKeys.defaults()` sets it.
