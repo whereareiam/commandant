@@ -30,9 +30,10 @@ import java.util.function.Supplier;
  * {@link me.whereareiam.commandant.Commandant#process Commandant} marks a command with the cooldown of its definition;
  * this class registers the postprocessor on the command manager that keeps a sender from running such a command
  * again until the cooldown is over, and tells the sender how long to wait. Cooldowns are kept per sender, identified
- * by {@link Actor#getUniqueId()}, in memory only; they do not survive a restart. The console, identified by
- * {@link Console#CONSOLE_UUID}, never waits. A command is put on cooldown as soon as it passes parsing and permission
- * checks, whatever its handler does afterwards. A blank message refuses the sender without telling them.
+ * by {@link Actor#getUniqueId()}, in memory only: they do not survive a restart, and {@link #clear(UUID)} ends a
+ * sender's cooldowns early. The console, identified by {@link Console#CONSOLE_UUID}, never waits. A command is put on
+ * cooldown as soon as it passes parsing and permission checks, whatever its handler does afterwards. A blank message
+ * refuses the sender without telling them.
  * <p>
  * Example usage:
  * <pre>{@code
@@ -53,9 +54,11 @@ import java.util.function.Supplier;
  * @param <S> the sender type, which must implement {@link Actor} at runtime
  */
 public final class CommandCooldowns<S> implements AutoCloseable {
+	private final CooldownRepository<UUID> profiles;
 	private final ScheduledExecutorService cleanup;
 
-	private CommandCooldowns(@NotNull ScheduledExecutorService cleanup) {
+	private CommandCooldowns(@NotNull CooldownRepository<UUID> profiles, @NotNull ScheduledExecutorService cleanup) {
+		this.profiles = profiles;
 		this.cleanup = cleanup;
 	}
 
@@ -142,10 +145,8 @@ public final class CommandCooldowns<S> implements AutoCloseable {
 			thread.setDaemon(true);
 			return thread;
 		});
-		CooldownRepository<S> repository = CooldownRepository.mapping(
-				sender -> ((Actor) sender).getUniqueId(),
-				CooldownRepository.<UUID>forMap(new HashMap<>())
-		);
+		CooldownRepository<UUID> profiles = CooldownRepository.forMap(new HashMap<>());
+		CooldownRepository<S> repository = CooldownRepository.mapping(sender -> ((Actor) sender).getUniqueId(), profiles);
 
 		CooldownConfiguration<S> configuration = CooldownConfiguration.<S>builder()
 				.repository(repository)
@@ -157,7 +158,16 @@ public final class CommandCooldowns<S> implements AutoCloseable {
 				.build();
 		commandManager.registerCommandPostProcessor(CooldownManager.cooldownManager(configuration).createPostprocessor());
 
-		return new CommandCooldowns<>(cleanup);
+		return new CommandCooldowns<>(profiles, cleanup);
+	}
+
+	/**
+	 * Ends every cooldown of a sender, such as when a player leaves, so the sender can run any command at once.
+	 *
+	 * @param uniqueId the sender's {@link Actor#getUniqueId()}
+	 */
+	public void clear(@NotNull UUID uniqueId) {
+		profiles.deleteProfile(uniqueId);
 	}
 
 	/**
