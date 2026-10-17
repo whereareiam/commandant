@@ -153,6 +153,18 @@ class CommandCooldownsTest {
 	}
 
 	@Test
+	void endsTheCooldownsOfAClearedSender() {
+		register("spawn", List.of("spawn"), new TestCooldown(true, 3, "default"));
+		TestActor alice = new TestActor();
+
+		run(alice, "spawn");
+		cooldowns.clear(alice.getUniqueId());
+		run(alice, "spawn");
+
+		assertEquals(2, executions.get("spawn"));
+	}
+
+	@Test
 	void letsTheConsoleRunACommandOnCooldown() {
 		register("spawn", List.of("spawn"), new TestCooldown(true, 3, "default"));
 		TestActor console = new TestActor(Console.CONSOLE_UUID);
