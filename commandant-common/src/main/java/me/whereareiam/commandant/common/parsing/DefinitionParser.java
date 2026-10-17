@@ -19,7 +19,7 @@ import java.util.*;
  * Applies definition overrides to Cloud commands.
  * <p>
  * Takes a parsed command and applies definition-based configuration
- * (aliases, descriptions, permissions, usage) to create the final command builders.
+ * (aliases, descriptions, permissions, usage, cooldown) to create the final command builders.
  *
  * @param <S> sender type
  * @param <D> definition type
@@ -270,6 +270,10 @@ public final class DefinitionParser<S, D> {
 		if (permission != null && !permission.isBlank()) {
 			builder = builder.permission(Permission.of(permission));
 		}
+
+		DefinitionAdapter.Cooldown cooldown = adapter.getCooldown(definition);
+		if (cooldown != null && cooldown.isEnabled() && cooldown.getDuration() > 0)
+			builder = DefinitionCooldown.apply(builder, cooldown, definitionId);
 
 		return builder;
 	}
