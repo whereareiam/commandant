@@ -12,10 +12,12 @@ Commandant 2.0.0 builds help and pagination from translatable components, so one
 * `HelpBuilder.Text` and `PaginationBuilder.Text` list every key with the named arguments it is given, so a plugin writes its translations in its own wording.
 * `TranslatableDescription.of(key)` gives a command a description that the help shows in the reader's language.
 * The page arrows run the page command themselves, so translations need no click tags.
+* `DefinitionAdapter.Cooldown` gives a definition's command a cooldown in seconds; definitions naming the same group share one, and a blank group gives a definition a cooldown of its own. `CommandCooldowns.register` enforces them per sender with Cloud's cooldown processor; the console is never limited.
 
 ## Upgrading
 
 * Replace `HelpMessages` and `PaginationMessages` with translations of each `HelpBuilder.Text` under the help's prefix, for example `arbor.help.title`, and of each `PaginationBuilder.Text` under `<prefix>.pagination`. Send the `Component` that `HelpBuilder.build` returns instead of deserializing a string.
 * Build help with `Help.builder(prefix, arguments).host(name).pageCommand(page -> "/<command> help " + page)`. `customArgumentNames` is now `argumentNames`, and `itemsPerPage` defaults to 7. Placeholders move from `{previousPage}`/`{nextPage}` to `{page}`, and from `{argument}` to `{name}`.
 * A pagination of your own is built with `Pagination.builder(prefix, arguments)`, whose `showIfOnePage`, `showPreviousOnFirst` and `showNextOnLast` replace the flags of `PaginationMessages`. `PaginationBuilder.build` returns the page line, or nothing when it is hidden.
+* A definition with a cooldown needs `org.incendo:cloud-processors-cooldown` at runtime.
 * `CommandantSyntaxFormatter` takes the required and optional argument templates as two strings instead of `HelpMessages.Format`.
