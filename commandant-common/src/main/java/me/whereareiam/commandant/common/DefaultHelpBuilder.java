@@ -1,246 +1,175 @@
 package me.whereareiam.commandant.common;
 
 import me.whereareiam.commandant.CommandantKeys;
+import me.whereareiam.commandant.builder.ArgumentFactory;
 import me.whereareiam.commandant.builder.HelpBuilder;
 import me.whereareiam.commandant.builder.PaginationBuilder;
-import me.whereareiam.commandant.model.message.HelpMessages;
-import me.whereareiam.keystone.model.SerializerOptions;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.ComponentLike;
+import net.kyori.adventure.text.JoinConfiguration;
 import org.incendo.cloud.Command;
 import org.incendo.cloud.component.CommandComponent;
+import org.incendo.cloud.description.Description;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Default implementation of HelpBuilder.
- * Formats a list of commands with their arguments and descriptions,
- * optionally including pagination.
- * <p>
- * This builder is generic and works with any sender type.
- * <p>
- * Usage example:
- * <pre>{@code
- * HelpMessages config = ...; // from your config
- * Map<String, String> customArgNames = Map.of("page", "page number");
- * PaginationBuilder paginationBuilder = ...; // optional
+ * The standard help: the {@link Text}s under a prefix, as translatable components with named arguments. A
+ * command's description is shown as a component when its {@link Description} is a {@link ComponentLike}, such as
+ * a translatable description, and as text otherwise.
  *
- * HelpBuilder<Actor> builder = new DefaultHelpBuilder<>(config, customArgNames, paginationBuilder, 10);
- *
- * Collection<Command<Actor>> commands = commandManager.commands();
- * String helpMessage = builder.build(commands, 1);
- * }</pre>
- *
- * @param <S> The sender type (e.g., Actor, DummyPlayer, CommandSender)
+ * @param <S> the sender type
  */
 public class DefaultHelpBuilder<S> implements HelpBuilder<S> {
-	private final HelpMessages messages;
-	private final Map<String, String> customArgumentNames;
-	private final PaginationBuilder paginationBuilder;
+	private static final Component SPACE = Component.space();
+
+	private final String prefix;
+	private final ArgumentFactory arguments;
+	private final String host;
+	private final Map<String, String> argumentNames;
+	private final PaginationBuilder pagination;
 	private final int itemsPerPage;
 	private final boolean sortAlphabetically;
 	private final boolean dedupeByDefinitionId;
-	private final SerializerOptions.PlaceholderFormat placeholderFormat;
 
 	/**
-	 * Creates a new DefaultHelpBuilder with the given configuration.
+	 * Creates a help.
 	 *
-	 * @param messages            The help message configuration
-	 * @param customArgumentNames Map of argument names to custom display names (can be null or empty)
-	 * @param paginationBuilder   The pagination builder (can be null to disable pagination)
-	 * @param itemsPerPage        Number of commands to display per page
-	 * @param sortAlphabetically  Whether to sort commands alphabetically by name
+	 * @param prefix               the keys' prefix, such as {@code arbor.help}
+	 * @param arguments            makes the named arguments of the texts
+	 * @param host                 the name of the plugin whose help it is, the heading's {@link Argument#HOST}
+	 * @param argumentNames        names to show instead of arguments' own names
+	 * @param pagination           builds the page line, or {@code null} for none
+	 * @param itemsPerPage         the number of commands on one page
+	 * @param sortAlphabetically   whether commands are listed by their arguments in alphabetical order
+	 * @param dedupeByDefinitionId whether commands of one definition are listed once
 	 */
 	public DefaultHelpBuilder(
-			@NotNull HelpMessages messages,
-			@Nullable Map<String, String> customArgumentNames,
-			@Nullable PaginationBuilder paginationBuilder,
-			int itemsPerPage,
-			boolean sortAlphabetically
-	) {
-		this(messages, customArgumentNames, paginationBuilder, itemsPerPage, sortAlphabetically, false,
-				SerializerOptions.PlaceholderFormat.CURLY_BRACES);
-	}
-
-	public DefaultHelpBuilder(
-			@NotNull HelpMessages messages,
-			@Nullable Map<String, String> customArgumentNames,
-			@Nullable PaginationBuilder paginationBuilder,
+			@NotNull String prefix,
+			@NotNull ArgumentFactory arguments,
+			@NotNull String host,
+			@NotNull Map<String, String> argumentNames,
+			@Nullable PaginationBuilder pagination,
 			int itemsPerPage,
 			boolean sortAlphabetically,
-			boolean dedupeByDefinitionId,
-			@NotNull SerializerOptions.PlaceholderFormat placeholderFormat
+			boolean dedupeByDefinitionId
 	) {
-		this.messages = messages;
-		this.customArgumentNames = customArgumentNames != null ? customArgumentNames : Map.of();
-		this.paginationBuilder = paginationBuilder;
+		if (itemsPerPage < 1) throw new IllegalArgumentException("itemsPerPage must be at least 1: " + itemsPerPage);
+
+		this.prefix = prefix;
+		this.arguments = arguments;
+		this.host = host;
+		this.argumentNames = Map.copyOf(argumentNames);
+		this.pagination = pagination;
 		this.itemsPerPage = itemsPerPage;
 		this.sortAlphabetically = sortAlphabetically;
 		this.dedupeByDefinitionId = dedupeByDefinitionId;
-		this.placeholderFormat = placeholderFormat;
 	}
 
 	@Override
 	@NotNull
-	public String build(@NotNull Collection<Command<S>> commands, int page) {
-		String message = String.join("\n", messages.getFormat());
-		Collection<Command<S>> resolvedCommands = dedupeByDefinitionId
-				? dedupeCommands(commands)
-				: commands;
+	public Component build(@NotNull Collection<Command<S>> commands, int page) {
+		List<Command<S>> listed = listed(commands);
+		List<Component> lines = new ArrayList<>();
+		lines.add(text(Text.TITLE, arguments.create(Argument.HOST, host)));
 
-		if (message.contains(token("commands")))
-			message = buildCommandList(resolvedCommands, message, page, itemsPerPage);
-
-		if (message.contains(token("pagination")) && paginationBuilder != null)
-			message = paginationBuilder.build(message, resolvedCommands.size(), page, itemsPerPage);
-		else
-			message = replaceToken(message, "pagination", "");
-
-		return message;
-	}
-
-	/**
-	 * Builds the command list section.
-	 *
-	 * @param commands     Collection of commands
-	 * @param message      The message template
-	 * @param page         Current page number
-	 * @param itemsPerPage Number of items per page
-	 * @return Message with <commands> placeholder replaced
-	 */
-	@NotNull
-	private String buildCommandList(
-			@NotNull Collection<Command<S>> commands,
-			@NotNull String message,
-			int page,
-			int itemsPerPage
-	) {
-		if (commands.isEmpty())
-			return replaceToken(message, "commands", messages.getNoCommands());
-
-		long skip = (long) (page - 1) * itemsPerPage;
-
-		var commandStream = commands.stream();
-		if (sortAlphabetically) {
-			commandStream = commandStream.sorted((c1, c2) ->
-					buildCommandKey(c1).compareToIgnoreCase(buildCommandKey(c2)));
-		}
-
-		List<String> commandDescriptions = commandStream
-				.skip(skip)
+		List<Component> commandLines = listed.stream()
+				.skip((long) (Math.max(1, page) - 1) * itemsPerPage)
 				.limit(itemsPerPage)
-				.map(this::formatCommand)
-				.collect(Collectors.toList());
+				.map(this::line)
+				.toList();
+		lines.addAll(commandLines.isEmpty() ? List.of(text(Text.EMPTY)) : commandLines);
 
-		String commandsString = String.join("\n", commandDescriptions);
-		return replaceToken(message, "commands", commandsString);
+		pageLine(listed.size(), page).ifPresent(lines::add);
+
+		return Component.join(JoinConfiguration.newlines(), lines);
 	}
 
 	@NotNull
-	private Collection<Command<S>> dedupeCommands(@NotNull Collection<Command<S>> commands) {
+	private Optional<Component> pageLine(int totalItems, int page) {
+		if (pagination == null) return Optional.empty();
+
+		return pagination.build(totalItems, page, itemsPerPage);
+	}
+
+	@NotNull
+	private List<Command<S>> listed(@NotNull Collection<Command<S>> commands) {
+		List<Command<S>> listed = dedupeByDefinitionId ? dedupe(commands) : new ArrayList<>(commands);
+		if (sortAlphabetically) listed.sort(Comparator.comparing(DefaultHelpBuilder::sortKey, String.CASE_INSENSITIVE_ORDER));
+
+		return listed;
+	}
+
+	@NotNull
+	private List<Command<S>> dedupe(@NotNull Collection<Command<S>> commands) {
 		List<Command<S>> result = new ArrayList<>();
 		Set<String> seen = new HashSet<>();
 
 		for (Command<S> command : commands) {
-			String definitionId = command.commandMeta()
-					.optional(CommandantKeys.DEFINITION_ID)
-					.orElse(null);
-			if (definitionId == null) {
-				result.add(command);
-				continue;
-			}
-
-			if (seen.add(definitionId))
-				result.add(command);
+			Optional<String> definitionId = command.commandMeta().optional(CommandantKeys.DEFINITION_ID);
+			if (definitionId.isEmpty() || seen.add(definitionId.get())) result.add(command);
 		}
 
 		return result;
 	}
 
-	/**
-	 * Formats a single command entry.
-	 *
-	 * @param command The command to format
-	 * @return Formatted command string
-	 */
 	@NotNull
-	private String formatCommand(@NotNull Command<S> command) {
-		String commandName = command.rootComponent().name();
-		String arguments = formatCommandArguments(command.nonFlagArguments());
-		String description = command.commandDescription().description().textDescription();
-
-		return replaceToken(
-				replaceToken(
-						replaceToken(messages.getCommandFormat(), "command", commandName),
-						"arguments",
-						arguments
-				),
-				"description",
-				description
+	private Component line(@NotNull Command<S> command) {
+		return text(
+				Text.COMMAND,
+				arguments.create(Argument.COMMAND, command.rootComponent().name()),
+				arguments.create(Argument.ARGUMENTS, arguments(command.nonFlagArguments())),
+				arguments.create(Argument.DESCRIPTION, description(command.commandDescription().description()))
 		);
 	}
 
-	/**
-	 * Formats command arguments according to their type (required/optional).
-	 *
-	 * @param arguments List of command components (arguments)
-	 * @return Formatted arguments string
-	 */
+	// Every argument after the root command, each after a space.
 	@NotNull
-	private String formatCommandArguments(@NotNull List<? extends CommandComponent<?>> arguments) {
-		if (arguments.isEmpty())
-			return "";
+	private Component arguments(@NotNull List<? extends CommandComponent<?>> components) {
+		List<Component> parts = new ArrayList<>();
+		for (CommandComponent<?> component : components.subList(Math.min(1, components.size()), components.size())) {
+			parts.add(SPACE);
+			parts.add(argument(component));
+		}
 
-		HelpMessages.Format format = messages.getArgumentFormat();
-		if (format == null)
-			return ""; // No argument formatting configured
-
-		return arguments.stream()
-				.skip(1) // Skip the command name itself
-				.map(argument -> formatSingleArgument(argument, format))
-				.collect(Collectors.collectingAndThen(
-						Collectors.joining(" "),
-						formattedArguments -> formattedArguments.isEmpty() ? "" : " " + formattedArguments
-				));
+		return Component.join(JoinConfiguration.noSeparators(), parts);
 	}
 
-	/**
-	 * Formats a single argument based on its type.
-	 *
-	 * @param argument The argument component
-	 * @param format   The format configuration
-	 * @return Formatted argument string
-	 */
 	@NotNull
-	private String formatSingleArgument(@NotNull CommandComponent<?> argument, @NotNull HelpMessages.Format format) {
-		CommandComponent.ComponentType type = argument.type();
-		boolean variable = type == CommandComponent.ComponentType.REQUIRED_VARIABLE
-				|| type == CommandComponent.ComponentType.OPTIONAL_VARIABLE;
+	private Component argument(@NotNull CommandComponent<?> component) {
+		String name = argumentNames.getOrDefault(component.name(), component.name());
 
-		String argumentName = variable
-				? customArgumentNames.getOrDefault(argument.name(), argument.name())
-				: argument.name();
-
-		return switch (type) {
-			case REQUIRED_VARIABLE -> replaceToken(format.getArgument(), "argument", argumentName);
-			case OPTIONAL_VARIABLE -> replaceToken(format.getOptionalArgument(), "argument", argumentName);
-			default -> argumentName;
+		return switch (component.type()) {
+			case REQUIRED_VARIABLE -> text(Text.ARGUMENT, arguments.create(Argument.NAME, name));
+			case OPTIONAL_VARIABLE -> text(Text.OPTIONAL_ARGUMENT, arguments.create(Argument.NAME, name));
+			default -> Component.text(component.name());
 		};
 	}
 
 	@NotNull
-	private String token(@NotNull String placeholder) {
-		return placeholderFormat.format(placeholder);
+	private static Component description(@NotNull Description description) {
+		if (description instanceof ComponentLike component) return component.asComponent();
+
+		return Component.text(description.textDescription());
 	}
 
 	@NotNull
-	private String replaceToken(@NotNull String message, @NotNull String placeholder, @NotNull String value) {
-		return message.replace(token(placeholder), value);
+	private Component text(@NotNull Text text, @NotNull ComponentLike... values) {
+		return Component.translatable(text.under(prefix), values);
 	}
 
 	@NotNull
-	private String buildCommandKey(@NotNull Command<S> command) {
+	private static String sortKey(@NotNull Command<?> command) {
 		return command.nonFlagArguments().stream()
 				.map(CommandComponent::name)
 				.collect(Collectors.joining(" "));

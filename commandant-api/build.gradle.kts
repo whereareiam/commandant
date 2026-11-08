@@ -4,6 +4,12 @@ plugins {
 
 dependencies {
     api(libs.keystone)
+
+    testImplementation(libs.adventure.api)
+    testImplementation(libs.cloud.core)
+    testImplementation(libs.junit.jupiter)
+
+    testRuntimeOnly(libs.junit.platform)
 }
 
 publishing {

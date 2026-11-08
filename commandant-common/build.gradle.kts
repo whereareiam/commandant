@@ -8,8 +8,10 @@ dependencies {
     compileOnly(libs.cloud.cooldowns)
     compileOnly(libs.cloud.annotations)
 
-    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.adventure.api)
     testImplementation(libs.cloud.core)
+    testImplementation(libs.junit.jupiter)
+
     testRuntimeOnly(libs.junit.platform)
 }
 
