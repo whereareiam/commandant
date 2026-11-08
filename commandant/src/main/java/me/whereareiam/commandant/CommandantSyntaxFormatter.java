@@ -1,6 +1,5 @@
 package me.whereareiam.commandant;
 
-import me.whereareiam.commandant.model.message.HelpMessages;
 import me.whereareiam.keystone.model.SerializerOptions;
 import org.incendo.cloud.CommandManager;
 import org.incendo.cloud.component.CommandComponent;
@@ -13,13 +12,18 @@ import java.util.Iterator;
 import java.util.Map;
 
 /**
- * Cloud syntax formatter that mirrors Commandant help argument formatting.
+ * Cloud syntax formatter that writes required and optional arguments with templates of their own, such as the
+ * syntax shown by Commandant's exception messages. Each template holds the {@code argument} placeholder in the
+ * given placeholder format, for example {@code <gray>[{argument}]</gray>}.
  *
  * @param <C> command sender type
  */
 public class CommandantSyntaxFormatter<C> extends StandardCommandSyntaxFormatter<C> {
+	private static final String ARGUMENT_PLACEHOLDER = "argument";
+
 	private final Map<String, String> argumentNames;
-	private final HelpMessages.Format argumentFormat;
+	private final String requiredFormat;
+	private final String optionalFormat;
 	private final SerializerOptions.PlaceholderFormat placeholderFormat;
 
 	/**
@@ -27,49 +31,55 @@ public class CommandantSyntaxFormatter<C> extends StandardCommandSyntaxFormatter
 	 *
 	 * @param manager           command manager
 	 * @param argumentNames     custom argument display names
-	 * @param argumentFormat    configured help argument format
-	 * @param placeholderFormat placeholder format used in message templates
+	 * @param requiredFormat    template of a required argument, or {@code null} for its bare name
+	 * @param optionalFormat    template of an optional argument, or {@code null} for its bare name
+	 * @param placeholderFormat placeholder format used in the templates
 	 */
 	public CommandantSyntaxFormatter(
 			@NotNull CommandManager<C> manager,
 			@Nullable Map<String, String> argumentNames,
-			@Nullable HelpMessages.Format argumentFormat,
+			@Nullable String requiredFormat,
+			@Nullable String optionalFormat,
 			@NotNull SerializerOptions.PlaceholderFormat placeholderFormat
 	) {
 		super(manager);
 		this.argumentNames = argumentNames != null ? argumentNames : Map.of();
-		this.argumentFormat = argumentFormat;
+		this.requiredFormat = requiredFormat != null ? requiredFormat : placeholderFormat.format(ARGUMENT_PLACEHOLDER);
+		this.optionalFormat = optionalFormat != null ? optionalFormat : placeholderFormat.format(ARGUMENT_PLACEHOLDER);
 		this.placeholderFormat = placeholderFormat;
 	}
 
 	@Override
 	protected @NotNull FormattingInstance createInstance() {
-		return new CommandantFormattingInstance(argumentNames, argumentFormat, placeholderFormat);
+		return new CommandantFormattingInstance(argumentNames, requiredFormat, optionalFormat, placeholderFormat);
 	}
 
 	private static final class CommandantFormattingInstance extends FormattingInstance {
 		private final Map<String, String> argumentNames;
-		private final HelpMessages.Format argumentFormat;
+		private final String requiredFormat;
+		private final String optionalFormat;
 		private final SerializerOptions.PlaceholderFormat placeholderFormat;
 
 		private CommandantFormattingInstance(
 				@NotNull Map<String, String> argumentNames,
-				@Nullable HelpMessages.Format argumentFormat,
+				@NotNull String requiredFormat,
+				@NotNull String optionalFormat,
 				@NotNull SerializerOptions.PlaceholderFormat placeholderFormat
 		) {
 			this.argumentNames = argumentNames;
-			this.argumentFormat = argumentFormat;
+			this.requiredFormat = requiredFormat;
+			this.optionalFormat = optionalFormat;
 			this.placeholderFormat = placeholderFormat;
 		}
 
 		@Override
 		public void appendRequired(@NotNull CommandComponent<?> argument) {
-			super.appendName(format(argument, requiredTemplate()));
+			super.appendName(format(argument, requiredFormat));
 		}
 
 		@Override
 		public void appendOptional(@NotNull CommandComponent<?> argument) {
-			super.appendName(format(argument, optionalTemplate()));
+			super.appendName(format(argument, optionalFormat));
 		}
 
 		@Override
@@ -77,7 +87,7 @@ public class CommandantSyntaxFormatter<C> extends StandardCommandSyntaxFormatter
 				@NotNull CommandComponent<?> component,
 				@NotNull AggregateParser<?, ?> parser
 		) {
-			String template = component.required() ? requiredTemplate() : optionalTemplate();
+			String template = component.required() ? requiredFormat : optionalFormat;
 			Iterator<? extends CommandComponent<?>> innerComponents = parser.components().iterator();
 			while (innerComponents.hasNext()) {
 				CommandComponent<?> innerComponent = innerComponents.next();
@@ -87,25 +97,11 @@ public class CommandantSyntaxFormatter<C> extends StandardCommandSyntaxFormatter
 		}
 
 		private @NotNull String format(@NotNull CommandComponent<?> argument, @NotNull String template) {
-			return template.replace(placeholderFormat.format("argument"), argumentName(argument));
+			return template.replace(placeholderFormat.format(ARGUMENT_PLACEHOLDER), argumentName(argument));
 		}
 
 		private @NotNull String argumentName(@NotNull CommandComponent<?> argument) {
 			return argumentNames.getOrDefault(argument.name(), argument.name());
-		}
-
-		private @NotNull String requiredTemplate() {
-			if (argumentFormat == null || argumentFormat.getArgument() == null)
-				return placeholderFormat.format("argument");
-
-			return argumentFormat.getArgument();
-		}
-
-		private @NotNull String optionalTemplate() {
-			if (argumentFormat == null || argumentFormat.getOptionalArgument() == null)
-				return placeholderFormat.format("argument");
-
-			return argumentFormat.getOptionalArgument();
 		}
 	}
 }
