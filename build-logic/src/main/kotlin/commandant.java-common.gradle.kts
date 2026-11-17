@@ -30,7 +30,6 @@ dependencies {
 
     add("compileOnly", libs.findLibrary("jetbrains-annotations").get())
     add("compileOnly", libs.findLibrary("adventure-api").get())
-    add("compileOnly", libs.findLibrary("cloud-core").get())
     add("compileOnly", libs.findLibrary("cloud-minecraft-extras").get())
     add("compileOnly", libs.findLibrary("keystone").get())
 }
