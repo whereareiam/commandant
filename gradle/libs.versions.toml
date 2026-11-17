@@ -4,7 +4,7 @@
 lombok = "1.18.42"
 jetbrains-annotations = "26.0.2"
 # Keystone 2 with its NeoForge platform (whereareiam/keystone#18 and feature/platform-neoforge), built into mavenLocal
-keystone = "2.0.0-local-48c3b7b"
+keystone = "2.0.0-local-e0ccf8d"
 # Semantica with joined and linked values (feature/composed-values over feature/typed-values), built into mavenLocal
 semantica = "dev-composed"
 configura = "2.1.0"
