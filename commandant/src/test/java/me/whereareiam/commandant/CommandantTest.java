@@ -18,8 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests for {@link Commandant}'s process API.
  * <p>
- * Note: These tests focus on definition processing, not annotation parsing.
- * Annotation parsing is the responsibility of each framework (e.g., OraylenAnnotationParser).
+ * Note: These tests focus on definition processing; {@link AnnotatedCommandsTest} covers reading annotations.
  */
 class CommandantTest {
 	private CommandManager<TestSender> commandManager;

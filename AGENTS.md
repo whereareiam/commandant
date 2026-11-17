@@ -1,7 +1,7 @@
 # AGENTS.md
 
-Commandant applies definition-driven configuration to Cloud commands. A plugin parses its commands with
-its own parser and hands them to Commandant, which applies a definition's aliases, usage, permission,
+Commandant applies definition-driven configuration to Cloud commands. A plugin reads its commands from Cloud's
+annotations with `AnnotatedCommands` (or its own parser) and hands them to Commandant, which applies a definition's aliases, usage, permission,
 description and cooldown, and registers them. It also builds help pages and pagination, tells senders why
 a command failed and enforces cooldowns, all through the plugin's Keystone 2 `Messenger`, in each sender's
 language.
@@ -17,11 +17,14 @@ language.
   (`fixture/TestMessenger`, `TestSender`) give every module's tests a real Keystone messenger whose Semantica
   reads Commandant's defaults. Public API: every change is compatibility-sensitive and needs complete Javadocs.
 - `commandant-common`: definition parsing and the default help and pagination builders.
-- `commandant`: the entry point plugins depend on (`Commandant`, `Help`, `Pagination`), the exception
+- `commandant`: the entry point plugins depend on (`Commandant`, `AnnotatedCommands`, `Help`, `Pagination`), the exception
   handlers (`ExceptionHandlerRegistrar`), the cooldowns (`CommandCooldowns`) and the built-in permission
   formatters.
 - `build-logic`: the `commandant.java-common` convention every module applies (Java 21, the shared
   `compileOnly` dependencies, a module name per jar, publishing, the version from `VERSION`).
+
+`AnnotatedCommands` exists because Cloud's `AnnotationParser` registers what it parses, while a command must be
+registered only after its definition is applied.
 
 Cloud and Lombok stay `compileOnly`; the plugin that uses Commandant provides Cloud. Commandant brings
 Keystone's API (and Semantica's through it); the plugin builds its own messenger and Semantica, and adds
