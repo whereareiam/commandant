@@ -1,268 +1,102 @@
 package me.whereareiam.commandant.exception;
 
+import me.whereareiam.commandant.Commandant;
 import me.whereareiam.commandant.exception.format.ExceptionFormatting;
-import me.whereareiam.commandant.model.message.ExceptionMessages;
-import me.whereareiam.commandant.model.message.MessageResolver;
-import me.whereareiam.keystone.Actor;
-import me.whereareiam.keystone.serializer.SerializerEngine;
-import net.kyori.adventure.text.Component;
+import me.whereareiam.commandant.message.ExceptionMessages;
+import me.whereareiam.keystone.Messenger;
+import me.whereareiam.semantica.Message;
 import org.incendo.cloud.CommandManager;
-import org.incendo.cloud.exception.*;
+import org.incendo.cloud.exception.ArgumentParseException;
+import org.incendo.cloud.exception.CommandExecutionException;
+import org.incendo.cloud.exception.InvalidCommandSenderException;
+import org.incendo.cloud.exception.InvalidSyntaxException;
+import org.incendo.cloud.exception.NoPermissionException;
+import org.incendo.cloud.exception.handling.ExceptionContext;
+import org.incendo.cloud.exception.handling.ExceptionHandler;
 import org.incendo.cloud.exception.parsing.NumberParseException;
-import org.incendo.cloud.minecraft.extras.AudienceProvider;
-import org.incendo.cloud.minecraft.extras.MinecraftExceptionHandler;
 import org.incendo.cloud.parser.standard.BooleanParser;
 import org.incendo.cloud.parser.standard.StringParser;
 import org.incendo.cloud.permission.Permission;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Objects;
+import java.util.function.Function;
 
 /**
- * Utility class for registering exception handlers with Cloud command managers.
- * <p>
- * Provides two registration modes:
- * <ul>
- *   <li>Key-based with MessageResolver for locale-aware translations</li>
- *   <li>Model-based with ExceptionMessages for simple static messages</li>
- * </ul>
- * <p>
- * Example usage:
+ * Tells a sender why their command failed, in their language, through the plugin's Keystone messenger: a missing
+ * permission, a wrong syntax, an argument that could not be read, the wrong kind of sender, or a failing handler. The
+ * texts are Commandant's {@code commandant.exception.*} (see {@link ExceptionMessages}), which the plugin may word
+ * anew in its own files.
  * <pre>{@code
- * // Locale-aware with translation system
- * ExceptionHandlerRegistrar.register(
- *     commandManager,
- *     ExceptionMessageKeys.defaults(),
- *     (actor, key) -> translations.getMessage(actor.getLocale(), key),
- *     serializer,
- *     Player::getAudience
- * );
- *
- * // Simple static messages
- * ExceptionHandlerRegistrar.register(
- *     commandManager,
- *     config.getExceptionMessages(),
- *     serializer,
- *     Player::getAudience
- * );
+ * ExceptionHandlerRegistrar.register(commandManager, messenger);
  * }</pre>
- * <p>
- * <b>Placeholders:</b> The placeholder name is "content", but the format (e.g., {content}, $content, %content%)
- * is configured in your SerializerEngine at runtime.
  */
 @SuppressWarnings("unused")
 public final class ExceptionHandlerRegistrar {
-	/**
-	 * Registers exception handlers with key-based message resolution (locale-aware).
-	 * <p>
-	 * The MessageResolver will be called with Actor and key to resolve localized messages.
-	 * <p>
-	 * Placeholder name: <code>content</code> (format configured in SerializerEngine)
-	 *
-	 * @param commandManager   The command manager to register handlers with
-	 * @param keys             The exception message keys to use
-	 * @param resolver         Function to resolve message by actor and key
-	 * @param serializer       The serializer engine for formatting messages
-	 * @param audienceProvider Provider to convert sender to Audience
-	 * @param <S>              The sender type (must extend Actor at runtime)
-	 * @throws ClassCastException if S does not extend Actor
-	 */
-	public static <S> void register(
-			@NotNull CommandManager<S> commandManager,
-			@NotNull ExceptionMessageKeys keys,
-			@NotNull MessageResolver resolver,
-			@NotNull SerializerEngine serializer,
-			@NotNull AudienceProvider<S> audienceProvider
-	) {
-		register(
-				commandManager,
-				keys,
-				resolver,
-				serializer,
-				audienceProvider,
-				ExceptionFormatting.defaults()
-		);
+	private ExceptionHandlerRegistrar() {
 	}
 
 	/**
-	 * Registers exception handlers with key-based message resolution (locale-aware).
-	 * <p>
-	 * The MessageResolver will be called with Actor and key to resolve localized messages.
-	 * <p>
-	 * Placeholder name: <code>content</code> (format configured in SerializerEngine)
+	 * Registers the handlers, writing a missing permission as Cloud does.
 	 *
-	 * @param commandManager       The command manager to register handlers with
-	 * @param keys                 The exception message keys to use
-	 * @param resolver             Function to resolve message by actor and key
-	 * @param serializer           The serializer engine for formatting messages
-	 * @param audienceProvider     Provider to convert sender to Audience
-	 * @param formatting           Value formatting registry for exception placeholders
-	 * @param <S>                  The sender type (must extend Actor at runtime)
-	 * @throws ClassCastException if S does not extend Actor
+	 * @param commandManager the command manager whose failures are told
+	 * @param messenger      the plugin's messenger over the same senders
+	 * @param <S>            the sender type
+	 */
+	public static <S> void register(@NotNull CommandManager<S> commandManager, @NotNull Messenger<S> messenger) {
+		register(commandManager, messenger, ExceptionFormatting.defaults());
+	}
+
+	/**
+	 * Registers the handlers, writing a missing permission as the formatting says.
+	 *
+	 * @param commandManager the command manager whose failures are told
+	 * @param messenger      the plugin's messenger over the same senders
+	 * @param formatting     how values in the texts are written, such as a permission
+	 * @param <S>            the sender type
 	 */
 	public static <S> void register(
 			@NotNull CommandManager<S> commandManager,
-			@NotNull ExceptionMessageKeys keys,
-			@NotNull MessageResolver resolver,
-			@NotNull SerializerEngine serializer,
-			@NotNull AudienceProvider<S> audienceProvider,
+			@NotNull Messenger<S> messenger,
 			@NotNull ExceptionFormatting formatting
 	) {
-		MinecraftExceptionHandler.create(audienceProvider)
-				.handler(ArgumentParseException.class, (formatter, exception) -> {
-					Actor sender = (Actor) exception.context().sender();
-					Throwable cause = exception.exception().getCause();
+		Objects.requireNonNull(messenger, "messenger");
+		Objects.requireNonNull(formatting, "formatting");
+		ExceptionMessages messages = Commandant.messages().exception();
 
-					if (cause instanceof BooleanParser.BooleanParseException e) {
-						String message = resolver.resolve(sender, keys.getInvalidSyntaxBoolean());
-						return serializer.serialize(sender, message, builder ->
-								builder.placeholder("content", e.input()));
-					}
-
-					if (cause instanceof NumberParseException e) {
-						String message = resolver.resolve(sender, keys.getInvalidSyntaxNumber());
-						return serializer.serialize(sender, message, builder ->
-								builder.placeholder("content", e.input()));
-					}
-
-					if (cause instanceof StringParser.StringParseException e) {
-						String message = resolver.resolve(sender, keys.getInvalidSyntaxString());
-						return serializer.serialize(sender, message, builder ->
-								builder.placeholder("content", e.input()));
-					}
-
-					return Component.text("Unknown parse exception occurred: " + cause.getMessage());
-				})
-				.handler(InvalidCommandSenderException.class, (formatter, exception) -> {
-					Actor sender = (Actor) exception.context().sender();
-					String message = resolver.resolve(sender, keys.getInvalidSender());
-					return serializer.serialize(sender, message, builder ->
-							builder.placeholder("content", ""));
-				})
-				.handler(NoPermissionException.class, (formatter, exception) -> {
-					Actor sender = (Actor) exception.context().sender();
-					String permission = formatContent(exception.exception().missingPermission(), formatting);
-					String message = resolver.resolve(sender, keys.getNoPermission());
-					return serializer.serialize(sender, message, builder ->
-							builder.placeholder("content", permission));
-				})
-				.handler(InvalidSyntaxException.class, (formatter, exception) -> {
-					Actor sender = (Actor) exception.context().sender();
-					String syntax = exception.exception().correctSyntax().replace("|", "/");
-					String message = resolver.resolve(sender, keys.getInvalidSyntax());
-					return serializer.serialize(sender, message, builder ->
-							builder.placeholder("content", syntax));
-				})
-				.handler(CommandExecutionException.class, (formatter, exception) -> {
-					Actor sender = (Actor) exception.context().sender();
-					String errorMessage = exception.exception().getMessage();
-					String message = resolver.resolve(sender, keys.getExecutionError());
-					return serializer.serialize(sender, message, builder ->
-							builder.placeholder("content", errorMessage));
-				})
-				.registerTo(commandManager);
+		commandManager.exceptionController()
+				.registerHandler(ArgumentParseException.class, tell(messenger, exception -> parse(messages, exception.getCause())))
+				.registerHandler(InvalidCommandSenderException.class, tell(messenger, exception -> messages.invalidSender()))
+				.registerHandler(NoPermissionException.class, tell(messenger, exception ->
+						messages.noPermission(permission(exception.missingPermission(), formatting))))
+				.registerHandler(InvalidSyntaxException.class, tell(messenger, exception ->
+						messages.invalidSyntax(exception.correctSyntax().replace("|", "/"))))
+				.registerHandler(CommandExecutionException.class, tell(messenger, exception ->
+						messages.executionError(String.valueOf(exception.getMessage()))));
 	}
 
-	/**
-	 * Registers exception handlers with static message model (non-locale-aware).
-	 * <p>
-	 * Uses ExceptionMessages directly without translation.
-	 * <p>
-	 * Placeholder name: <code>content</code> (format configured in SerializerEngine)
-	 *
-	 * @param commandManager   The command manager to register handlers with
-	 * @param messages         The exception messages to use
-	 * @param serializer       The serializer engine for formatting messages
-	 * @param audienceProvider Provider to convert sender to Audience
-	 * @param <S>              The sender type (must extend Actor at runtime)
-	 * @throws ClassCastException if S does not extend Actor
-	 */
-	public static <S> void register(
-			@NotNull CommandManager<S> commandManager,
-			@NotNull ExceptionMessages messages,
-			@NotNull SerializerEngine serializer,
-			@NotNull AudienceProvider<S> audienceProvider
+	private static <S, T extends Throwable> ExceptionHandler<S, T> tell(
+			@NotNull Messenger<S> messenger,
+			@NotNull Function<T, Message> message
 	) {
-		register(
-				commandManager,
-				messages,
-				serializer,
-				audienceProvider,
-				ExceptionFormatting.defaults()
-		);
+		return (ExceptionContext<S, T> context) -> messenger.send(context.context().sender(), message.apply(context.exception()));
 	}
 
-	/**
-	 * Registers exception handlers with static message model (non-locale-aware).
-	 * <p>
-	 * Uses ExceptionMessages directly without translation.
-	 * <p>
-	 * Placeholder name: <code>content</code> (format configured in SerializerEngine)
-	 *
-	 * @param commandManager       The command manager to register handlers with
-	 * @param messages             The exception messages to use
-	 * @param serializer           The serializer engine for formatting messages
-	 * @param audienceProvider     Provider to convert sender to Audience
-	 * @param formatting           Value formatting registry for exception placeholders
-	 * @param <S>                  The sender type (must extend Actor at runtime)
-	 * @throws ClassCastException if S does not extend Actor
-	 */
-	public static <S> void register(
-			@NotNull CommandManager<S> commandManager,
-			@NotNull ExceptionMessages messages,
-			@NotNull SerializerEngine serializer,
-			@NotNull AudienceProvider<S> audienceProvider,
-			@NotNull ExceptionFormatting formatting
-	) {
-		MinecraftExceptionHandler.create(audienceProvider)
-				.handler(ArgumentParseException.class, (formatter, exception) -> {
-					Actor sender = (Actor) exception.context().sender();
-					Throwable cause = exception.exception().getCause();
-
-					if (cause instanceof BooleanParser.BooleanParseException e)
-						return serializer.serialize(sender, messages.getInvalidSyntaxBoolean(), builder ->
-								builder.placeholder("content", e.input()));
-
-					if (cause instanceof NumberParseException e)
-						return serializer.serialize(sender, messages.getInvalidSyntaxNumber(), builder ->
-								builder.placeholder("content", e.input()));
-
-					if (cause instanceof StringParser.StringParseException e)
-						return serializer.serialize(sender, messages.getInvalidSyntaxString(), builder ->
-								builder.placeholder("content", e.input()));
-
-					return Component.text("Unknown parse exception occurred: " + cause.getMessage());
-				})
-				.handler(InvalidCommandSenderException.class, (formatter, exception) -> {
-					Actor sender = (Actor) exception.context().sender();
-					return serializer.serialize(sender, messages.getInvalidSender(), builder ->
-							builder.placeholder("content", ""));
-				})
-				.handler(NoPermissionException.class, (formatter, exception) -> {
-					Actor sender = (Actor) exception.context().sender();
-					String permission = formatContent(exception.exception().missingPermission(), formatting);
-					return serializer.serialize(sender, messages.getNoPermission(), builder ->
-							builder.placeholder("content", permission));
-				})
-				.handler(InvalidSyntaxException.class, (formatter, exception) -> {
-					Actor sender = (Actor) exception.context().sender();
-					String syntax = exception.exception().correctSyntax().replace("|", "/");
-					return serializer.serialize(sender, messages.getInvalidSyntax(), builder ->
-							builder.placeholder("content", syntax));
-				})
-				.handler(CommandExecutionException.class, (formatter, exception) -> {
-					Actor sender = (Actor) exception.context().sender();
-					String errorMessage = exception.exception().getMessage();
-					return serializer.serialize(sender, messages.getExecutionError(), builder ->
-							builder.placeholder("content", errorMessage));
-				})
-				.registerTo(commandManager);
+	@NotNull
+	private static Message parse(@NotNull ExceptionMessages messages, @NotNull Throwable cause) {
+		return switch (cause) {
+			case BooleanParser.BooleanParseException exception -> messages.invalidBoolean(exception.input());
+			case NumberParseException exception -> messages.invalidNumber(exception.input());
+			case StringParser.StringParseException exception -> messages.invalidString(exception.input());
+			default -> messages.invalidArgument(String.valueOf(cause.getMessage()));
+		};
 	}
 
-	private static @NotNull String formatContent(@NotNull Object value, @NotNull ExceptionFormatting formatting) {
-		String formatted = formatting.format(value);
+	@NotNull
+	private static String permission(@NotNull Permission permission, @NotNull ExceptionFormatting formatting) {
+		String formatted = formatting.format(permission);
 		if (formatted != null) return formatted;
-		if (value instanceof Permission permission) return permission.permissionString();
-		return Objects.toString(value, "");
+
+		return permission.permissionString();
 	}
 }

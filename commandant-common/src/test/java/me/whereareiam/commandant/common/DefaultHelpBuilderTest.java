@@ -2,12 +2,18 @@ package me.whereareiam.commandant.common;
 
 import me.whereareiam.commandant.CommandantKeys;
 import me.whereareiam.commandant.builder.HelpBuilder;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.ComponentLike;
+import me.whereareiam.commandant.fixture.TestMessenger;
+import me.whereareiam.commandant.fixture.TestSender;
+import me.whereareiam.commandant.message.CommandantMessages;
+import me.whereareiam.commandant.message.GeneratedCommandantMessages;
+import me.whereareiam.commandant.model.TranslatableDescription;
+import me.whereareiam.keystone.Messenger;
+import me.whereareiam.semantica.Message;
+import me.whereareiam.semantica.Value;
+import me.whereareiam.semantica.testing.MemorySource;
 import org.incendo.cloud.Command;
 import org.incendo.cloud.CommandManager;
 import org.incendo.cloud.description.CommandDescription;
-import org.incendo.cloud.description.Description;
 import org.incendo.cloud.execution.ExecutionCoordinator;
 import org.incendo.cloud.internal.CommandRegistrationHandler;
 import org.jetbrains.annotations.NotNull;
@@ -15,20 +21,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
-import static me.whereareiam.commandant.builder.HelpBuilder.Text;
 import static org.incendo.cloud.parser.standard.IntegerParser.integerParser;
 import static org.incendo.cloud.parser.standard.StringParser.stringParser;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DefaultHelpBuilderTest {
-	private static final String PREFIX = "arbor.help";
+	private static final CommandantMessages MESSAGES = new GeneratedCommandantMessages();
 
+	private final TestSender reader = TestSender.player("Alice");
 	private CommandManager<TestSender> commandManager;
 
 	@BeforeEach
@@ -45,10 +49,10 @@ class DefaultHelpBuilderTest {
 	}
 
 	@Test
-	void buildsAPageOfTranslatableTexts() {
+	void showsAPageWithEachArgumentAndATranslatedDescription() {
 		Command<TestSender> status = commandManager.commandBuilder("arbor")
 				.literal("status")
-				.commandDescription(CommandDescription.commandDescription(new KeyDescription("arbor.command.status.description")))
+				.commandDescription(CommandDescription.commandDescription(TranslatableDescription.of(Message.of("arbor.status"))))
 				.handler(context -> {})
 				.build();
 		Command<TestSender> module = commandManager.commandBuilder("arbor")
@@ -58,72 +62,48 @@ class DefaultHelpBuilderTest {
 				.commandDescription(CommandDescription.commandDescription("Shows a module"))
 				.handler(context -> {})
 				.build();
+		Messenger<TestSender> messenger = TestMessenger.create(new MemorySource("arbor")
+				.put(Locale.ENGLISH, "arbor.status", "Shows the status"));
 
-		HelpBuilder<TestSender> help = help(Map.of("id", "module"), null, 7);
+		show(messenger, help(Map.of("id", "module"), null, 7).build(List.of(status, module), 1));
 
-		assertEquals(
-				String.join("\n",
-						"arbor.help.title(host=Arbor)",
-						"arbor.help.command(command=arbor, arguments= status, description=arbor.command.status.description())",
-						"arbor.help.command(command=arbor, arguments= module arbor.help.argument(name=module) "
-								+ "arbor.help.optionalArgument(name=page), description=Shows a module)"
-				),
-				Rendered.of(help.build(List.of(status, module), 1))
-		);
+		assertEquals(List.of(
+				"Arbor commands",
+				"/arbor status - Shows the status",
+				"/arbor module <module> [page] - Shows a module"
+		), reader.lines());
 	}
 
 	@Test
-	void everyTextGetsTheArgumentsItDeclares() {
-		Command<TestSender> module = commandManager.commandBuilder("arbor")
-				.literal("module")
-				.required("id", stringParser())
-				.optional("page", integerParser())
+	void takesThePluginsOwnWordingOfAnArgument() {
+		Command<TestSender> warp = commandManager.commandBuilder("warp")
+				.required("name", stringParser())
 				.handler(context -> {})
 				.build();
-		HelpBuilder<TestSender> help = help(Map.of(), null, 7);
+		Messenger<TestSender> messenger = TestMessenger.create(new MemorySource("plugin")
+				.put(Locale.ENGLISH, "commandant.help.argument", "({name})"));
 
-		Map<String, Set<String>> built = new HashMap<>(Rendered.arguments(help.build(List.of(module), 1)));
-		built.putAll(Rendered.arguments(help.build(List.of(), 1)));
+		show(messenger, help(Map.of(), null, 7).build(List.of(warp), 1));
 
-		Map<String, Set<String>> declared = Rendered.declared(PREFIX, Text.values());
-		assertEquals(declared, built);
+		assertEquals("/warp (name) - ", reader.lines().get(1));
 	}
 
 	@Test
 	void showsTheEmptyLineWhenAPageHasNoCommand() {
 		HelpBuilder<TestSender> help = help(Map.of(), null, 7);
 
-		assertEquals(
-				"arbor.help.title(host=Arbor)\narbor.help.empty()",
-				Rendered.of(help.build(List.of(), 1))
-		);
-		assertEquals(
-				"arbor.help.title(host=Arbor)\narbor.help.empty()",
-				Rendered.of(help.build(List.of(command("alpha", "alpha")), 2))
-		);
+		assertEquals(List.of(MESSAGES.help().title("Arbor"), MESSAGES.help().empty()), help.build(List.of(), 1));
+		assertEquals(List.of(MESSAGES.help().title("Arbor"), MESSAGES.help().empty()), help.build(List.of(command("alpha", "alpha")), 2));
 	}
 
 	@Test
 	void addsThePageLineUnderTheCommands() {
-		DefaultPaginationBuilder pagination = new DefaultPaginationBuilder(
-				PREFIX + ".pagination",
-				Rendered.ARGUMENTS,
-				page -> "/arbor help " + page,
-				false,
-				false,
-				false
-		);
-		HelpBuilder<TestSender> help = help(Map.of(), pagination, 1);
+		DefaultPaginationBuilder pagination = new DefaultPaginationBuilder(MESSAGES.pagination(), page -> "/arbor help " + page, false, false, false);
 
-		assertEquals(
-				String.join("\n",
-						"arbor.help.title(host=Arbor)",
-						"arbor.help.command(command=bravo, arguments=, description=bravo)",
-						"arbor.help.pagination.line(current=2, max=2, "
-								+ "previous=arbor.help.pagination.previous(page=1)[click /arbor help 1], next=)"
-				),
-				Rendered.of(help.build(List.of(command("alpha", "alpha"), command("bravo", "bravo")), 2))
-		);
+		show(TestMessenger.create(), help(Map.of(), pagination, 1).build(List.of(command("alpha", "alpha"), command("bravo", "bravo")), 2));
+
+		assertEquals(List.of("Arbor commands", "/bravo - bravo", "Page 2 of 2 « Page 1 "), reader.lines());
+		assertEquals(List.of("/arbor help 1"), reader.clickable());
 	}
 
 	@Test
@@ -145,30 +125,37 @@ class DefaultHelpBuilderTest {
 				command("golfalias", "golf")
 		);
 		HelpBuilder<TestSender> help = new DefaultHelpBuilder<>(
-				PREFIX,
-				Rendered.ARGUMENTS,
+				MESSAGES.help(),
 				"Arbor",
 				Map.of(),
-				new DefaultPaginationBuilder(PREFIX + ".pagination", Rendered.ARGUMENTS, null, false, false, false),
+				new DefaultPaginationBuilder(MESSAGES.pagination(), null, false, false, false),
 				3,
 				true,
 				true
 		);
 
-		String secondPage = Rendered.of(help.build(commands, 2));
-		String thirdPage = Rendered.of(help.build(commands, 3));
+		List<Message> secondPage = help.build(commands, 2);
+		List<Message> thirdPage = help.build(commands, 3);
 
-		assertTrue(secondPage.contains("current=2, max=3"));
-		assertTrue(thirdPage.contains("current=3, max=3"));
-		assertTrue(thirdPage.contains("command=golf"));
+		assertEquals(Map.of("current", 2, "max", 3), numbers(secondPage.getLast()));
+		assertEquals(Map.of("current", 3, "max", 3), numbers(thirdPage.getLast()));
+		show(TestMessenger.create(), List.of(thirdPage.get(1)));
+		assertEquals(List.of("/golf - golf"), reader.lines());
 	}
 
-	private HelpBuilder<TestSender> help(
-			Map<String, String> argumentNames,
-			DefaultPaginationBuilder pagination,
-			int itemsPerPage
-	) {
-		return new DefaultHelpBuilder<>(PREFIX, Rendered.ARGUMENTS, "Arbor", argumentNames, pagination, itemsPerPage, false, false);
+	private void show(Messenger<TestSender> messenger, List<Message> lines) {
+		lines.forEach(line -> messenger.send(reader, line));
+	}
+
+	private static Map<String, Integer> numbers(Message line) {
+		return Map.of(
+				"current", ((Value.Number) line.getValues().get("current")).value().intValue(),
+				"max", ((Value.Number) line.getValues().get("max")).value().intValue()
+		);
+	}
+
+	private HelpBuilder<TestSender> help(Map<String, String> argumentNames, DefaultPaginationBuilder pagination, int itemsPerPage) {
+		return new DefaultHelpBuilder<>(MESSAGES.help(), "Arbor", argumentNames, pagination, itemsPerPage, false, false);
 	}
 
 	private Command<TestSender> command(String alias, String definitionId) {
@@ -177,21 +164,5 @@ class DefaultHelpBuilderTest {
 				.commandDescription(CommandDescription.commandDescription(definitionId))
 				.handler(context -> {})
 				.build();
-	}
-
-	// A description that is a component, as a translatable description is.
-	private record KeyDescription(String key) implements Description, ComponentLike {
-		@Override
-		public @NotNull String textDescription() {
-			return key;
-		}
-
-		@Override
-		public @NotNull Component asComponent() {
-			return Component.translatable(key);
-		}
-	}
-
-	private static final class TestSender {
 	}
 }

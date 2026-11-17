@@ -16,12 +16,13 @@ val buildVersion = providers.environmentVariable("VERSION").orElse("dev")
 group = "me.whereareiam"
 version = buildVersion.get()
 
+// Java 21, as Keystone 2 and Semantica need it.
 java {
-    toolchain.languageVersion.set(JavaLanguageVersion.of(17))
+    toolchain.languageVersion.set(JavaLanguageVersion.of(21))
 }
 
 tasks.withType<JavaCompile>().configureEach {
-    options.release.set(17)
+    options.release.set(21)
 }
 
 dependencies {
@@ -29,10 +30,15 @@ dependencies {
     add("annotationProcessor", libs.findLibrary("lombok").get())
 
     add("compileOnly", libs.findLibrary("jetbrains-annotations").get())
-    add("compileOnly", libs.findLibrary("adventure-api").get())
     add("compileOnly", libs.findLibrary("cloud-core").get())
-    add("compileOnly", libs.findLibrary("cloud-minecraft-extras").get())
-    add("compileOnly", libs.findLibrary("keystone").get())
+}
+
+// A Java module name of its own, such as me.whereareiam.commandant.api, so that a NeoForge mod can nest the jar.
+tasks.named<Jar>("jar") {
+    val moduleName = "me.whereareiam." + project.name.replace("commandant-", "commandant.")
+    manifest {
+        attributes("Automatic-Module-Name" to moduleName)
+    }
 }
 
 tasks.withType<Test>().configureEach {

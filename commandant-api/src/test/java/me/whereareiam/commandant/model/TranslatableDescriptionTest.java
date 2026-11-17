@@ -1,6 +1,6 @@
 package me.whereareiam.commandant.model;
 
-import net.kyori.adventure.text.Component;
+import me.whereareiam.semantica.Message;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -8,10 +8,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class TranslatableDescriptionTest {
 	@Test
-	void rendersAsTheTranslatableComponentOfItsKey() {
-		TranslatableDescription description = TranslatableDescription.of("arbor.command.status.description");
+	void isItsMessageAndShowsItsKeyAsText() {
+		Message message = Message.of("arbor.command.status.description");
+		TranslatableDescription description = TranslatableDescription.of(message);
 
-		assertEquals(Component.translatable("arbor.command.status.description"), description.asComponent());
+		assertEquals(message, description.getMessage());
 		assertEquals("arbor.command.status.description", description.textDescription());
 		assertFalse(description.isEmpty());
 	}

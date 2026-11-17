@@ -1,9 +1,9 @@
 package me.whereareiam.commandant;
 
-import me.whereareiam.commandant.builder.ArgumentFactory;
 import me.whereareiam.commandant.builder.HelpBuilder;
 import me.whereareiam.commandant.builder.PaginationBuilder;
 import me.whereareiam.commandant.common.DefaultHelpBuilder;
+import me.whereareiam.commandant.message.CommandantMessages;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -12,18 +12,17 @@ import java.util.Objects;
 import java.util.function.IntFunction;
 
 /**
- * Creates a {@link HelpBuilder}: a help made of translatable components, which the plugin's translator renders in
- * each reader's language. The plugin writes a translation of each {@link HelpBuilder.Text} under the prefix, and of
- * each {@link me.whereareiam.commandant.builder.PaginationBuilder.Text} under {@code <prefix>.pagination}.
+ * Creates a {@link HelpBuilder}: a help made of Commandant's translated messages ({@code commandant.help.*} and
+ * {@code commandant.pagination.*}, see {@link CommandantMessages}), which Keystone shows in each reader's language.
  *
  * <pre>{@code
- * HelpBuilder<S> help = Help.<S>builder("arbor.help", TextArgument::of)
+ * HelpBuilder<S> help = Help.<S>builder()
  *         .host("Arbor")
  *         .pageCommand(page -> "/arbor help " + page)
  *         .dedupeByDefinitionId(true)
  *         .build();
  *
- * sender.sendMessage(help.build(visibleCommands, page));
+ * help.build(visibleCommands, page).forEach(line -> messenger.send(sender, line));
  * }</pre>
  */
 @SuppressWarnings("unused")
@@ -31,27 +30,23 @@ public final class Help {
 	/**
 	 * Starts a help.
 	 *
-	 * @param prefix    the keys' prefix, such as {@code arbor.help}
-	 * @param arguments makes the named arguments of the texts, such as semantica's {@code TextArgument::of}
-	 * @param <S>       the sender type
+	 * @param <S> the sender type
 	 * @return the builder
 	 */
 	@NotNull
-	public static <S> Builder<S> builder(@NotNull String prefix, @NotNull ArgumentFactory arguments) {
-		return new Builder<>(prefix, arguments);
+	public static <S> Builder<S> builder() {
+		return new Builder<>();
 	}
 
 	/**
 	 * Builder of a {@link HelpBuilder}. Without further settings it lists 7 commands per page in the order given,
-	 * with a page line under {@code <prefix>.pagination} that is hidden when the commands fit on one page.
+	 * with a page line that is hidden when the commands fit on one page.
 	 *
 	 * @param <S> the sender type
 	 */
 	public static final class Builder<S> {
 		private static final int DEFAULT_ITEMS_PER_PAGE = 7;
 
-		private final String prefix;
-		private final ArgumentFactory arguments;
 		private String host;
 		private Map<String, String> argumentNames = Map.of();
 		private PaginationBuilder pagination;
@@ -60,9 +55,7 @@ public final class Help {
 		private boolean sortAlphabetically;
 		private boolean dedupeByDefinitionId;
 
-		private Builder(@NotNull String prefix, @NotNull ArgumentFactory arguments) {
-			this.prefix = prefix;
-			this.arguments = arguments;
+		private Builder() {
 		}
 
 		/**
@@ -163,8 +156,7 @@ public final class Help {
 			Objects.requireNonNull(host, "host");
 
 			return new DefaultHelpBuilder<>(
-					prefix,
-					arguments,
+					Commandant.messages().help(),
 					host,
 					argumentNames,
 					paginationOrDefault(),
@@ -178,7 +170,7 @@ public final class Help {
 		private PaginationBuilder paginationOrDefault() {
 			if (pagination != null) return pagination;
 
-			return Pagination.builder(prefix + '.' + HelpBuilder.PAGINATION, arguments)
+			return Pagination.builder()
 					.pageCommand(pageCommand)
 					.build();
 		}

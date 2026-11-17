@@ -1,0 +1,25 @@
+{
+  "exception": {
+    "no-permission": "<white>You don't have \"<gray>{permission}</gray>\" permission to use this command.",
+    "execution-error": "<white>An error occurred while executing the command:</white> <gray>{error}",
+    "invalid-syntax": "<white>Invalid syntax, please use:</white> <gray>/{syntax}",
+    "invalid-boolean": "<white>You tried to use <gray>{input}</gray> as a boolean, but it's not a valid value, please use <green>true</green> or <red>false</red>.",
+    "invalid-number": "<white>You tried to use <gray>{input}</gray> as a number, but it's not a valid value, please use a valid number.",
+    "invalid-string": "<white>You tried to use <gray>{input}</gray> as a string, but it's not a valid value, please use a valid string.",
+    "invalid-argument": "<white>An argument is not valid:</white> <gray>{error}",
+    "invalid-sender": "<white>You cannot use this command.",
+    "cooldown": "<white>You must wait <gray>{seconds, plural, one {# second} other {# seconds}}</gray> before using this command again."
+  },
+  "help": {
+    "title": "<gold><bold>{host}</bold> <gray>commands",
+    "command": "<yellow>/{command}<gray>{arguments}</gray> <dark_gray>-</dark_gray> <white>{description}",
+    "argument": "<{name}>",
+    "optional-argument": "[{name}]",
+    "empty": "<gray>There are no commands on this page."
+  },
+  "pagination": {
+    "line": "<gray>Page <white>{current}</white> of <white>{max}</white> {previous} {next}",
+    "previous": "<gold>« Page {page}",
+    "next": "<gold>Page {page} »"
+  }
+}

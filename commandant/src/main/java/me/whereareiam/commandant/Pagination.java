@@ -1,6 +1,5 @@
 package me.whereareiam.commandant;
 
-import me.whereareiam.commandant.builder.ArgumentFactory;
 import me.whereareiam.commandant.builder.PaginationBuilder;
 import me.whereareiam.commandant.common.DefaultPaginationBuilder;
 import org.jetbrains.annotations.NotNull;
@@ -9,16 +8,15 @@ import org.jetbrains.annotations.Nullable;
 import java.util.function.IntFunction;
 
 /**
- * Creates a {@link PaginationBuilder}, for a paginated list of a plugin's own. The help makes its own
- * pagination; see {@link Help}. The plugin writes a translation of each {@link PaginationBuilder.Text} under the
- * prefix.
+ * Creates a {@link PaginationBuilder}, for a paginated list of a plugin's own. The help makes its own pagination; see
+ * {@link Help}. Its texts are Commandant's {@code commandant.pagination.*}.
  *
  * <pre>{@code
- * PaginationBuilder pagination = Pagination.builder("arbor.module.list.pagination", TextArgument::of)
+ * PaginationBuilder pagination = Pagination.builder()
  *         .pageCommand(page -> "/arbor module list " + page)
  *         .build();
  *
- * pagination.build(modules.size(), page, 10).ifPresent(sender::sendMessage);
+ * pagination.build(modules.size(), page, 10).ifPresent(line -> messenger.send(sender, line));
  * }</pre>
  */
 @SuppressWarnings("unused")
@@ -26,13 +24,11 @@ public final class Pagination {
 	/**
 	 * Starts a pagination.
 	 *
-	 * @param prefix    the keys' prefix, such as {@code arbor.module.list.pagination}
-	 * @param arguments makes the named arguments of the texts, such as semantica's {@code TextArgument::of}
 	 * @return the builder
 	 */
 	@NotNull
-	public static Builder builder(@NotNull String prefix, @NotNull ArgumentFactory arguments) {
-		return new Builder(prefix, arguments);
+	public static Builder builder() {
+		return new Builder();
 	}
 
 	/**
@@ -40,16 +36,12 @@ public final class Pagination {
 	 * fits on one page, arrows are shown only where there is a page to go to, and they run no command.
 	 */
 	public static final class Builder {
-		private final String prefix;
-		private final ArgumentFactory arguments;
 		private IntFunction<String> pageCommand;
 		private boolean showIfOnePage;
 		private boolean showPreviousOnFirst;
 		private boolean showNextOnLast;
 
-		private Builder(@NotNull String prefix, @NotNull ArgumentFactory arguments) {
-			this.prefix = prefix;
-			this.arguments = arguments;
+		private Builder() {
 		}
 
 		/**
@@ -109,8 +101,7 @@ public final class Pagination {
 		@NotNull
 		public PaginationBuilder build() {
 			return new DefaultPaginationBuilder(
-					prefix,
-					arguments,
+					Commandant.messages().pagination(),
 					pageCommand,
 					showIfOnePage,
 					showPreviousOnFirst,

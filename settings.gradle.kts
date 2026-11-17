@@ -8,6 +8,9 @@ pluginManagement {
     repositories {
         gradlePluginPortal()
         mavenCentral()
+        // Semantica's Gradle plugin, a development build until it is published
+        mavenLocal()
+        maven("https://registry.whereareiam.me/maven/packages")
         maven("https://maven.whereareiam.me/release")
         maven("https://maven.whereareiam.me/development")
     }
@@ -18,6 +21,9 @@ dependencyResolutionManagement {
 
     repositories {
         mavenCentral()
+        // Keystone 2 and Semantica's development builds, until they are published
+        mavenLocal()
+        maven("https://registry.whereareiam.me/maven/packages")
         maven("https://maven.whereareiam.me/release")
         maven("https://maven.whereareiam.me/development")
         maven("https://oss.sonatype.org/content/repositories/snapshots/")

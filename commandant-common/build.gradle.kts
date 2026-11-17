@@ -8,10 +8,9 @@ dependencies {
     compileOnly(libs.cloud.cooldowns)
     compileOnly(libs.cloud.annotations)
 
-    testImplementation(libs.adventure.api)
-    testImplementation(libs.cloud.core)
+    testImplementation(testFixtures(project(":commandant-api")))
     testImplementation(libs.junit.jupiter)
-
+    testImplementation(libs.cloud.core)
     testRuntimeOnly(libs.junit.platform)
 }
 

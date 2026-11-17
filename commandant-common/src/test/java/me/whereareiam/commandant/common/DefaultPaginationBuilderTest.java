@@ -1,91 +1,67 @@
 package me.whereareiam.commandant.common;
 
 import me.whereareiam.commandant.builder.PaginationBuilder;
+import me.whereareiam.commandant.fixture.TestMessenger;
+import me.whereareiam.commandant.fixture.TestSender;
+import me.whereareiam.commandant.message.GeneratedCommandantMessages;
+import me.whereareiam.commandant.message.PaginationMessages;
+import me.whereareiam.keystone.Messenger;
 import org.junit.jupiter.api.Test;
 
-import java.util.Map;
+import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
-import static me.whereareiam.commandant.builder.PaginationBuilder.Text;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class DefaultPaginationBuilderTest {
-	private static final String PREFIX = "arbor.help.pagination";
+	private static final PaginationMessages MESSAGES = new GeneratedCommandantMessages().pagination();
 
-	@Test
-	void everyTextGetsTheArgumentsItDeclares() {
-		PaginationBuilder pagination = pagination(false, false, false);
-
-		Map<String, Set<String>> declared = Rendered.declared(PREFIX, Text.values());
-		assertEquals(declared, Rendered.arguments(pagination.build(20, 2, 7).orElseThrow()));
-	}
+	private final Messenger<TestSender> messenger = TestMessenger.create();
+	private final TestSender reader = TestSender.player("Alice");
 
 	@Test
 	void hidesTheLineWhenEverythingFitsOnOnePage() {
-		PaginationBuilder pagination = pagination(false, false, false);
-
-		assertEquals(Optional.empty(), pagination.build(5, 1, 7));
+		assertEquals(Optional.empty(), pagination(false, false, false).build(5, 1, 7));
 	}
 
 	@Test
 	void showsArrowsThatRunThePageCommandOfTheirPage() {
-		PaginationBuilder pagination = pagination(false, false, false);
+		show(pagination(false, false, false), 20, 2);
 
-		assertEquals(
-				"arbor.help.pagination.line(current=2, max=3, "
-						+ "previous=arbor.help.pagination.previous(page=1)[click /arbor help 1], "
-						+ "next=arbor.help.pagination.next(page=3)[click /arbor help 3])",
-				Rendered.of(pagination.build(20, 2, 7).orElseThrow())
-		);
+		assertEquals(List.of("Page 2 of 3 « Page 1 Page 3 »"), reader.lines());
+		assertEquals(List.of("/arbor help 1", "/arbor help 3"), reader.clickable());
 	}
 
 	@Test
 	void leavesOutArrowsWithNoPageToGoTo() {
-		PaginationBuilder pagination = pagination(false, false, false);
+		show(pagination(false, false, false), 10, 1);
+		show(pagination(false, false, false), 10, 2);
 
-		assertEquals(
-				"arbor.help.pagination.line(current=1, max=2, previous=, "
-						+ "next=arbor.help.pagination.next(page=2)[click /arbor help 2])",
-				Rendered.of(pagination.build(10, 1, 7).orElseThrow())
-		);
-		assertEquals(
-				"arbor.help.pagination.line(current=2, max=2, "
-						+ "previous=arbor.help.pagination.previous(page=1)[click /arbor help 1], next=)",
-				Rendered.of(pagination.build(10, 2, 7).orElseThrow())
-		);
+		assertEquals(List.of("Page 1 of 2  Page 2 »", "Page 2 of 2 « Page 1 "), reader.lines());
+		assertEquals(List.of("/arbor help 2", "/arbor help 1"), reader.clickable());
 	}
 
 	@Test
 	void showsWhatItIsToldToOnASinglePage() {
-		PaginationBuilder pagination = pagination(true, true, true);
+		show(pagination(true, true, true), 0, 1);
 
-		assertEquals(
-				"arbor.help.pagination.line(current=1, max=1, "
-						+ "previous=arbor.help.pagination.previous(page=1)[click /arbor help 1], "
-						+ "next=arbor.help.pagination.next(page=1)[click /arbor help 1])",
-				Rendered.of(pagination.build(0, 1, 7).orElseThrow())
-		);
+		assertEquals(List.of("Page 1 of 1 « Page 1 Page 1 »"), reader.lines());
+		assertEquals(List.of("/arbor help 1", "/arbor help 1"), reader.clickable());
 	}
 
 	@Test
 	void arrowsRunNothingWithoutAPageCommand() {
-		PaginationBuilder pagination = new DefaultPaginationBuilder(PREFIX, Rendered.ARGUMENTS, null, false, false, false);
+		show(new DefaultPaginationBuilder(MESSAGES, null, false, false, false), 10, 1);
 
-		assertEquals(
-				"arbor.help.pagination.line(current=1, max=2, previous=, next=arbor.help.pagination.next(page=2))",
-				Rendered.of(pagination.build(10, 1, 7).orElseThrow())
-		);
+		assertEquals(List.of("Page 1 of 2  Page 2 »"), reader.lines());
+		assertEquals(List.of(), reader.clickable());
+	}
+
+	private void show(PaginationBuilder pagination, int totalItems, int page) {
+		messenger.send(reader, pagination.build(totalItems, page, 7).orElseThrow());
 	}
 
 	private PaginationBuilder pagination(boolean showIfOnePage, boolean showPreviousOnFirst, boolean showNextOnLast) {
-		return new DefaultPaginationBuilder(
-				PREFIX,
-				Rendered.ARGUMENTS,
-				page -> "/arbor help " + page,
-				showIfOnePage,
-				showPreviousOnFirst,
-				showNextOnLast
-		);
+		return new DefaultPaginationBuilder(MESSAGES, page -> "/arbor help " + page, showIfOnePage, showPreviousOnFirst, showNextOnLast);
 	}
 }

@@ -10,6 +10,7 @@ dependencies {
     compileOnly(libs.cloud.cooldowns)
 
     // Testing
+    testImplementation(testFixtures(project(":commandant-api")))
     testRuntimeOnly(libs.junit.platform)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.mockito.core)
@@ -17,8 +18,6 @@ dependencies {
     testImplementation(libs.cloud.core)
     testImplementation(libs.cloud.cooldowns)
     testImplementation(libs.cloud.annotations)
-    testImplementation(libs.cloud.minecraft.extras)
-    testImplementation(libs.adventure.api)
     testImplementation(libs.jetbrains.annotations)
 }
 
