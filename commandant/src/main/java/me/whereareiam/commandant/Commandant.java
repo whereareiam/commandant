@@ -2,6 +2,8 @@ package me.whereareiam.commandant;
 
 import me.whereareiam.commandant.adapter.DefinitionAdapter;
 import me.whereareiam.commandant.common.parsing.DefinitionParser;
+import me.whereareiam.commandant.message.CommandantMessages;
+import me.whereareiam.commandant.message.GeneratedCommandantMessages;
 import org.incendo.cloud.Command;
 import org.incendo.cloud.CommandManager;
 import org.jetbrains.annotations.NotNull;
@@ -39,6 +41,19 @@ import java.util.function.Consumer;
  * }</pre>
  */
 public final class Commandant {
+	private static final CommandantMessages MESSAGES = new GeneratedCommandantMessages();
+
+	/**
+	 * Returns Commandant's own texts, which its help, exceptions and cooldowns send, for a plugin that sends one of
+	 * them itself.
+	 *
+	 * @return the texts
+	 */
+	@NotNull
+	public static CommandantMessages messages() {
+		return MESSAGES;
+	}
+
 	/**
 	 * Process a single parsed command with optional definition-based overrides.
 	 * <p>

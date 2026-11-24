@@ -2,216 +2,117 @@ package me.whereareiam.commandant.exception;
 
 import me.whereareiam.commandant.exception.format.CloudPermissionFormatters;
 import me.whereareiam.commandant.exception.format.ExceptionFormatting;
-import me.whereareiam.commandant.model.message.ExceptionMessages;
-import me.whereareiam.keystone.Actor;
-import me.whereareiam.keystone.model.SerializerContent;
-import me.whereareiam.keystone.serializer.SerializerEngine;
-import net.kyori.adventure.audience.Audience;
-import net.kyori.adventure.text.Component;
+import me.whereareiam.commandant.fixture.TestMessenger;
+import me.whereareiam.commandant.fixture.TestSender;
+import me.whereareiam.keystone.Messenger;
+import me.whereareiam.semantica.testing.MemorySource;
 import org.incendo.cloud.CommandManager;
-import org.incendo.cloud.component.CommandComponent;
-import org.incendo.cloud.context.CommandContext;
-import org.incendo.cloud.exception.NoPermissionException;
 import org.incendo.cloud.execution.ExecutionCoordinator;
 import org.incendo.cloud.internal.CommandRegistrationHandler;
-import org.incendo.cloud.minecraft.extras.AudienceProvider;
 import org.incendo.cloud.permission.Permission;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
-import java.util.function.Consumer;
+import java.util.concurrent.CompletionException;
 
+import static org.incendo.cloud.parser.standard.BooleanParser.booleanParser;
+import static org.incendo.cloud.parser.standard.IntegerParser.integerParser;
+import static org.incendo.cloud.parser.standard.StringParser.stringParser;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class ExceptionHandlerRegistrarTest {
-	private TestCommandManager commandManager;
-	private TestActor actor;
-	private RecordingSerializerEngine serializer;
-	private ExceptionMessages messages;
+	private final TestSender alice = TestSender.player("Alice");
+	private CommandManager<TestSender> commandManager;
 
 	@BeforeEach
 	void setUp() {
-		this.commandManager = new TestCommandManager();
-		this.actor = new TestActor();
-		this.serializer = new RecordingSerializerEngine();
-		this.messages = new ExceptionMessages();
-		this.messages.setNoPermission("Missing {content}");
-		this.messages.setExecutionError("Error {content}");
-		this.messages.setInvalidSyntax("Syntax {content}");
-		this.messages.setInvalidSyntaxBoolean("Boolean {content}");
-		this.messages.setInvalidSyntaxNumber("Number {content}");
-		this.messages.setInvalidSyntaxString("String {content}");
-		this.messages.setInvalidSender("Sender");
+		commandManager = new CommandManager<>(ExecutionCoordinator.simpleCoordinator(), CommandRegistrationHandler.nullCommandRegistrationHandler()) {
+			@Override
+			public boolean hasPermission(@NotNull TestSender sender, @NotNull String permission) {
+				return permission.isEmpty();
+			}
+		};
 	}
 
 	@Test
-	void legacyRegisterUsesRawPermissionDisplayFormatter() throws Throwable {
-		ExceptionHandlerRegistrar.register(
-				commandManager,
-				messages,
-				serializer,
-				AudienceProvider.nativeAudience()
-		);
+	void tellsAMissingPermissionAsCloudWritesIt() {
+		ExceptionHandlerRegistrar.register(commandManager, TestMessenger.create());
+		commandManager.command(commandManager.commandBuilder("admin").permission("identica.admin").handler(context -> {}));
 
-		Permission permission = Permission.permission("identica.admin");
+		run("admin");
 
-		handleNoPermission(permission);
-
-		assertEquals("Missing " + permission.permissionString(), serializer.lastMessage());
+		// Cloud hands over the command's permission inside the sender's requirement, written in parentheses.
+		assertEquals(List.of("You don't have \"(identica.admin)\" permission to use this command."), alice.lines());
 	}
 
 	@Test
-	void formatterAwareRegisterUsesProvidedPermissionFormatter() throws Throwable {
-		ExceptionHandlerRegistrar.register(
-				commandManager,
-				messages,
-				serializer,
-				AudienceProvider.nativeAudience(),
-				ExceptionFormatting.builder()
-						.format(Permission.class, CloudPermissionFormatters.minimal())
-						.build()
-		);
+	void writesAMissingPermissionAsTheFormattingSays() {
+		ExceptionHandlerRegistrar.register(commandManager, TestMessenger.create(), ExceptionFormatting.builder()
+				.format(Permission.class, CloudPermissionFormatters.minimal())
+				.build());
+		commandManager.command(commandManager.commandBuilder("audit")
+				.permission(Permission.anyOf(
+						Permission.permission("identica.admin"),
+						Permission.allOf(Permission.permission("identica.staff"), Permission.permission("identica.audit"))))
+				.handler(context -> {}));
 
-		Permission permission = Permission.anyOf(
-				Permission.permission("identica.admin"),
-				Permission.allOf(
-						Permission.permission("identica.staff"),
-						Permission.permission("identica.audit")
-				)
-		);
+		run("audit");
 
-		handleNoPermission(permission);
-
-		assertEquals(
-				"Missing identica.admin | (identica.audit & identica.staff)",
-				serializer.lastMessage()
-		);
+		assertEquals(List.of("You don't have \"identica.admin | (identica.audit & identica.staff)\" permission to use this command."),
+				alice.lines());
 	}
 
 	@Test
-	void keyBasedFormatterAwareRegisterUsesProvidedPermissionFormatter() throws Throwable {
-		ExceptionHandlerRegistrar.register(
-				commandManager,
-				ExceptionMessageKeys.defaults(),
-				(sender, key) -> switch (key) {
-					case "commandant.exception.no_permission" -> "Denied {content}";
-					case "commandant.exception.execution_error" -> "Error {content}";
-					case "commandant.exception.invalid_syntax" -> "Syntax {content}";
-					case "commandant.exception.invalid_syntax.boolean" -> "Boolean {content}";
-					case "commandant.exception.invalid_syntax.number" -> "Number {content}";
-					case "commandant.exception.invalid_syntax.string" -> "String {content}";
-					case "commandant.exception.invalid_sender" -> "Sender";
-					default -> key;
-				},
-				serializer,
-				AudienceProvider.nativeAudience(),
-				ExceptionFormatting.builder()
-						.format(Permission.class, permission -> "custom:" + permission.permissionString())
-						.build()
-		);
+	void takesThePluginsOwnWording() {
+		Messenger<TestSender> messenger = TestMessenger.create(new MemorySource("plugin")
+				.put(Locale.ENGLISH, "commandant.exception.no-permission", "Denied {permission}"));
+		ExceptionHandlerRegistrar.register(commandManager, messenger);
+		commandManager.command(commandManager.commandBuilder("admin").permission("identica.admin").handler(context -> {}));
 
-		handleNoPermission(Permission.permission("identica.admin"));
+		run("admin");
 
-		assertEquals("Denied custom:identica.admin", serializer.lastMessage());
+		assertEquals(List.of("Denied (identica.admin)"), alice.lines());
 	}
 
-	private void handleNoPermission(@NotNull Permission permission) throws Throwable {
-		CommandContext<TestActor> context = new CommandContext<>(actor, commandManager);
-		List<CommandComponent<?>> currentChain = new ArrayList<>();
-		NoPermissionException exception = new NoPermissionException(
-				commandManager.testPermission(actor, permission),
-				actor,
-				currentChain
-		);
-		commandManager.exceptionController().handleException(context, exception);
+	@Test
+	void tellsTheSyntaxAndArgumentsThatCannotBeRead() {
+		ExceptionHandlerRegistrar.register(commandManager, TestMessenger.create());
+		commandManager.command(commandManager.commandBuilder("warp").required("name", stringParser()).optional("page", integerParser()).handler(context -> {}));
+		commandManager.command(commandManager.commandBuilder("pages").required("page", integerParser()).handler(context -> {}));
+		commandManager.command(commandManager.commandBuilder("toggle").required("on", booleanParser()).handler(context -> {}));
+
+		run("warp");
+		run("pages ten");
+		run("toggle maybe");
+
+		assertEquals(List.of(
+				"Invalid syntax, please use: /warp <name> [page]",
+				"You tried to use ten as a number, but it's not a valid value, please use a valid number.",
+				"You tried to use maybe as a boolean, but it's not a valid value, please use true or false."
+		), alice.lines());
 	}
 
-	private static final class TestCommandManager extends CommandManager<TestActor> {
-		private TestCommandManager() {
-			super(ExecutionCoordinator.simpleCoordinator(), CommandRegistrationHandler.nullCommandRegistrationHandler());
-		}
+	@Test
+	void tellsAFailingHandler() {
+		ExceptionHandlerRegistrar.register(commandManager, TestMessenger.create());
+		commandManager.command(commandManager.commandBuilder("broken").handler(context -> {
+			throw new IllegalStateException("the vault is closed");
+		}));
 
-		@Override
-		public boolean hasPermission(@NotNull TestActor sender, @NotNull String permission) {
-			return sender.hasPermission(permission);
-		}
+		run("broken");
+
+		assertEquals(List.of("An error occurred while executing the command: java.lang.IllegalStateException: the vault is closed"),
+				alice.lines());
 	}
 
-	private static final class TestActor implements Actor, Audience {
-		@Override
-		public @NotNull UUID getUniqueId() {
-			return UUID.randomUUID();
-		}
-
-		@Override
-		public @NotNull String getUsername() {
-			return "tester";
-		}
-
-		@Override
-		public void sendMessage(@NotNull Component component) {
-		}
-
-		@Override
-		public boolean hasPermission(@NotNull String permission) {
-			return false;
-		}
-
-		@Override
-		public @NotNull Locale getLocale() {
-			return Locale.ENGLISH;
-		}
-
-		@Override
-		public @NotNull Audience getAudience() {
-			return this;
-		}
-	}
-
-	private static final class RecordingSerializerEngine implements SerializerEngine {
-		private String lastMessage = "";
-
-		@Override
-		public @NotNull String serialize(@NotNull Component component) {
-			return component.toString();
-		}
-
-		@Override
-		public @NotNull Component serialize(@NotNull SerializerContent content) {
-			return Component.text(content.getMessage());
-		}
-
-		@Override
-		public @NotNull String renderTemplate(@NotNull SerializerContent content) {
-			return content.getMessage();
-		}
-
-		@Override
-		public @NotNull Component serialize(
-				@NotNull Actor receiver,
-				@NotNull String message,
-				@NotNull Consumer<SerializerContent.Builder> consumer
-		) {
-			SerializerContent.Builder builder = SerializerContent.builder()
-					.receiver(receiver)
-					.message(message);
-			consumer.accept(builder);
-			SerializerContent content = builder.build();
-			String rendered = content.getMessage();
-			for (var entry : content.getPlaceholders().entrySet())
-				rendered = rendered.replace("{" + entry.getKey() + "}", entry.getValue());
-
-			lastMessage = rendered;
-			return Component.text(rendered);
-		}
-
-		private @NotNull String lastMessage() {
-			return lastMessage;
+	private void run(String input) {
+		try {
+			commandManager.commandExecutor().executeCommand(alice, input).join();
+		} catch (CompletionException ignored) {
+			// The exception controller has told the sender; Cloud still completes the execution exceptionally.
 		}
 	}
 }
