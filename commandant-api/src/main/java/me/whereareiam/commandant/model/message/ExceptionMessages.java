@@ -52,4 +52,10 @@ public class ExceptionMessages {
 	 * (e.g., console trying to execute a player-only command)
 	 */
 	private String invalidSender;
+
+	/**
+	 * Message shown when a command is refused because it is on cooldown for the sender.
+	 * Placeholder: content - the seconds left until the command can be used again, rounded up
+	 */
+	private String cooldown;
 }
