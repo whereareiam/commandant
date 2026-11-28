@@ -13,13 +13,14 @@ import java.util.Map;
 
 /**
  * Cloud syntax formatter that writes required and optional arguments with templates of their own, such as the
- * syntax shown by Commandant's exception messages. Each template holds the {@code argument} placeholder in the
- * given placeholder format, for example {@code <gray>[{argument}]</gray>}.
+ * syntax shown by Commandant's exception messages. Each template holds the {@code name} placeholder in the
+ * given placeholder format, for example {@code <gray>[{name}]</gray>}, as the help's
+ * {@link me.whereareiam.commandant.builder.HelpBuilder.Text#ARGUMENT} does, so one template serves both.
  *
  * @param <C> command sender type
  */
 public class CommandantSyntaxFormatter<C> extends StandardCommandSyntaxFormatter<C> {
-	private static final String ARGUMENT_PLACEHOLDER = "argument";
+	private static final String ARGUMENT_PLACEHOLDER = "name";
 
 	private final Map<String, String> argumentNames;
 	private final String requiredFormat;
