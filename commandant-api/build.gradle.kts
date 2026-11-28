@@ -3,10 +3,10 @@ plugins {
 }
 
 dependencies {
+    api(libs.cloud.core)
     api(libs.keystone)
 
     testImplementation(libs.adventure.api)
-    testImplementation(libs.cloud.core)
     testImplementation(libs.junit.jupiter)
 
     testRuntimeOnly(libs.junit.platform)

@@ -12,10 +12,12 @@ Commandant 2.0.0 builds help and pagination from translatable components, so one
 * `HelpBuilder.Text` and `PaginationBuilder.Text` list every key with the named arguments it is given, so a plugin writes its translations in its own wording.
 * `TranslatableDescription.of(key)` gives a command a description that the help shows in the reader's language.
 * The page arrows run the page command themselves, so translations need no click tags.
+* `AnnotatedCommands.of(manager, senderType).parse(containers)` reads commands written with Cloud's annotations and Commandant's `@Definition` without registering them, so each is registered by `Commandant.process(...)` once its definition is applied.
 
 ## Upgrading
 
 * Replace `HelpMessages` and `PaginationMessages` with translations of each `HelpBuilder.Text` under the help's prefix, for example `arbor.help.title`, and of each `PaginationBuilder.Text` under `<prefix>.pagination`. Send the `Component` that `HelpBuilder.build` returns instead of deserializing a string.
 * Build help with `Help.builder(prefix, arguments).host(name).pageCommand(page -> "/<command> help " + page)`. `customArgumentNames` is now `argumentNames`, and `itemsPerPage` defaults to 7. Placeholders move from `{previousPage}`/`{nextPage}` to `{page}`, and from `{argument}` to `{name}`.
 * A pagination of your own is built with `Pagination.builder(prefix, arguments)`, whose `showIfOnePage`, `showPreviousOnFirst` and `showNextOnLast` replace the flags of `PaginationMessages`. `PaginationBuilder.build` returns the page line, or nothing when it is hidden.
-* `CommandantSyntaxFormatter` takes the required and optional argument templates as two strings instead of `HelpMessages.Format`.
+* Commandant now brings `cloud-core` and `cloud-annotations` along as dependencies. A plugin that shades Commandant excludes them where its platform provides Cloud; a plugin's own parser over a copy of Cloud's annotations is replaced by `AnnotatedCommands`.
+* `CommandantSyntaxFormatter` takes the required and optional argument templates as two strings instead of `HelpMessages.Format`, whose placeholder is `{name}` instead of `{argument}`, as in the help's `argument` and `optionalArgument`.

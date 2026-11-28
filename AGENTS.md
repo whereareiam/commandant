@@ -1,8 +1,8 @@
 # AGENTS.md
 
-Commandant applies definition-driven configuration to Cloud commands. A plugin parses its commands with
-its own parser and hands them to Commandant, which applies a definition's aliases, usage, permission,
-description and cooldown, and registers them. It also builds help pages and pagination and renders
+Commandant applies definition-driven configuration to Cloud commands. A plugin reads its commands from Cloud's
+annotations with `AnnotatedCommands` and hands them to Commandant, which applies a definition's aliases, usage,
+permission, description and cooldown, and registers them. It also builds help pages and pagination and renders
 command exceptions through Keystone messages.
 
 ## Modules
@@ -11,13 +11,20 @@ command exceptions through Keystone messages.
   the help and pagination builders, message models, exception message keys and exception formatting.
   Public API: every change is compatibility-sensitive and needs complete Javadocs.
 - `commandant-common`: definition parsing and the default help and pagination builders.
-- `commandant`: the entry point plugins depend on (`Commandant`, `Help`, `Pagination`), the exception
-  handlers, the built-in permission formatters and the syntax formatter.
+- `commandant`: the entry point plugins depend on (`Commandant`, `AnnotatedCommands`, `Help`, `Pagination`),
+  the exception handlers, the built-in permission formatters and the syntax formatter.
 - `build-logic`: the `commandant.java-common` convention every module applies (Java 17, the shared
   `compileOnly` dependencies, publishing, the version from `VERSION`).
 
-Cloud, Adventure and Lombok stay `compileOnly`; the plugin that uses Commandant provides Cloud and
-Adventure. Keystone is the only library Commandant brings along.
+`AnnotatedCommands` exists because Cloud's `AnnotationParser` registers what it parses, while a command must be
+registered only after its definition is applied. A plugin writes its commands with Cloud's annotations
+(`@Command`, `@Argument`, `@Default`, `@Permission`, `@CommandDescription`, `@Parser`, `@Suggestions`, Cloud's
+`@Range`) and Commandant's `@Definition`; Commandant declares no annotations of its own beside `@Definition`.
+
+Commandant brings Cloud along: `cloud-core` (through `commandant-api`) and `cloud-annotations` (through
+`commandant`) are `api` dependencies, so a plugin that uses Commandant writes commands without declaring Cloud
+itself. A platform's Cloud (`cloud-velocity`, `cloud-neoforge`, ...) and `cloud-minecraft-extras`, which follow the
+platform, stay the plugin's, as do Adventure and Lombok. Keystone is the other library Commandant brings along.
 
 ## Build and test
 
